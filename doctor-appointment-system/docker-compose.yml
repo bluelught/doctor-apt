@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  database:
+    build: ./database
+    container_name: appointment_db
+    environment:
+      - SQLITE_DATABASE=appointments.db
+    volumes:
+      - db_data:/data
+    healthcheck:
+      test: ["CMD", "test", "-f", "/data/appointments.db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app_network
+
+  backend:
+    build: ./backend
+    container_name: appointment_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:////shared/appointments.db
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here-change-in-production}
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+    volumes:
+      - db_data:/shared
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
+
+  frontend:
+    build: ./frontend
+    container_name: appointment_frontend
+    ports:
+      - "8501:8501"
+    environment:
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - app_network
+
+volumes:
+  db_data:
+
+networks:
+  app_network:
+    driver: bridge
